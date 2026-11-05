@@ -1,0 +1,1386 @@
+{
+  "format": "readfirst/map@1",
+  "groups": [
+    {
+      "id": "agents",
+      "title": "Agent skill files (billing, audit-*, code, data...) that coding agents load; no runtime code",
+      "files": [
+        ".agents/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "apps-api",
+      "title": "NestJS API: the only place auth (better-auth), RBAC, audit log, billing webhooks, integrations and browser automation live",
+      "files": [
+        "apps/api/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/api run test",
+          "why": "the test suite of @trycompai/api"
+        },
+        {
+          "run": "bun --filter @trycompai/api run typecheck",
+          "why": "types of @trycompai/api"
+        },
+        {
+          "run": "bun --filter @trycompai/api run lint",
+          "why": "lint rules of @trycompai/api"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Membership changes must go through /v1/people/:id; better-auth's update-member-role, leave and remove-member are refused in the before-hook, and invite roles must match role names exactly, so calling them from a new client returns 403.",
+          "files": [
+            "apps/api/src/auth/membership-route-policy.ts",
+            "apps/api/src/auth/auth-request-policy.ts",
+            "apps/api/src/auth/auth.server.ts"
+          ]
+        },
+        {
+          "text": "Callers without full member CRUD cannot assign privileged built-in roles or custom roles that hold permissions they lack; new role-editing paths must call validateAssignableRoles or they reopen privilege escalation.",
+          "files": [
+            "apps/api/src/people/utils/role-assignment.ts",
+            "apps/api/src/people/utils/role-authorization.ts"
+          ]
+        },
+        {
+          "text": "A webhook that verifies a signature only gets req.rawBody if its path is in RAW_BODY_PATHS in main.ts (stripe billing, background checks, pentest); a new signed webhook not listed there fails verification because the body was already parsed.",
+          "files": [
+            "apps/api/src/main.ts",
+            "apps/api/src/billing/billing-webhook.service.ts"
+          ]
+        },
+        {
+          "text": "load-env.ts loads .env with dotenv override:true, so a local .env beats shell or host variables; a stale .env silently wins over what you export.",
+          "files": [
+            "apps/api/src/config/load-env.ts"
+          ]
+        },
+        {
+          "text": "The 2FA take-over classifier (login outcome and two-factor method) is an LLM call whose values (code, passkey, passkey_only, other) drive the app's take-over wording; 'passkey' must only be returned when a code method exists, and it runs on needs_2fa, challenge and unknown outcomes; changing a value means changing ConnectVendorLoginFlow too.",
+          "files": [
+            "apps/api/src/browserbase/browser-login-classifier.ts",
+            "apps/api/src/browserbase/browser-credential-signin.service.ts",
+            "apps/api/src/browserbase/browser-credential-signin.service.spec.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "apps-app",
+      "title": "Next.js compliance and security product UI; talks to the NestJS API with SWR hooks and apiClient",
+      "files": [
+        "apps/app/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/app run test",
+          "why": "app tests (script runs vitest in watch mode on a terminal; CI-style one-shot is cd apps/app && bunx vitest run)"
+        },
+        {
+          "run": "bun --filter @trycompai/app run typecheck",
+          "why": "types of @trycompai/app"
+        },
+        {
+          "run": "bun --filter @trycompai/app run lint",
+          "why": "eslint and prettier"
+        }
+      ],
+      "risks": [
+        {
+          "text": "The revalidate route compares the posted secret with !== against REVALIDATION_SECRET, which env.mjs only requires to be a string and .env.example ships as empty, so an empty secret revalidates any path for anyone; use a non-empty minimum and a constant-time compare.",
+          "files": [
+            "apps/app/src/app/api/revalidate/path/route.ts",
+            "apps/app/src/env.mjs"
+          ]
+        },
+        {
+          "text": "Design-system Select inside a Radix modal Dialog is unclickable unless portal={false} is passed (ConnectionVariablesForm), but the same change on the in-popover people selects broke positioning and was reverted; do not copy portal={false} between the two cases.",
+          "files": [
+            "apps/app/src/components/integrations/ConnectionVariablesForm.tsx",
+            "apps/app/src/app/(app)/[orgId]/people/all/components/TwoFactorSourceSelector.tsx",
+            "apps/app/src/app/(app)/[orgId]/people/all/components/PeopleFilters.tsx"
+          ]
+        },
+        {
+          "text": "The owner-role removal check in the people table is UX only; role authority is enforced by the API, so do not add role rules here without the matching API check.",
+          "files": [
+            "apps/app/src/app/(app)/[orgId]/people/all/components/TeamMembersClient.tsx"
+          ]
+        },
+        {
+          "text": "Connect-vendor-login flow resumes from saved client state (clearConnectState) and shows a resume strip rather than reopening full screen; starting a new connect must clear the old state or it resumes a stale draft, and the take-over copy depends on the API's twoFactorMethod values.",
+          "files": [
+            "apps/app/src/app/(app)/[orgId]/tasks/[taskId]/components/BrowserAutomations.tsx",
+            "apps/app/src/app/(app)/[orgId]/tasks/[taskId]/components/browser-automations/ConnectVendorLoginFlow.tsx"
+          ]
+        },
+        {
+          "text": "Tailwind class names built from pieces (bg-${accent}-50) are not generated, so the colors vanish in the build; use full class names or a lookup map.",
+          "files": [
+            "apps/app/src/app/(app)/[orgId]/cloud-tests/components/CloudTestsSection.tsx"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "apps-browser-extension",
+      "title": "WXT browser extension for filling security questionnaires",
+      "files": [
+        "apps/browser-extension/**"
+      ],
+      "checks": [
+        {
+          "run": "bun run test",
+          "why": "the test suite"
+        },
+        {
+          "run": "bun run typecheck",
+          "why": "types"
+        },
+        {
+          "run": "bun run lint",
+          "why": "lint rules"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "apps-framework-editor",
+      "title": "Admin editor for framework templates; has its own Prisma setup",
+      "files": [
+        "apps/framework-editor/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/framework-editor run test",
+          "why": "the test suite of @trycompai/framework-editor"
+        },
+        {
+          "run": "bun --filter @trycompai/framework-editor run typecheck",
+          "why": "types of @trycompai/framework-editor"
+        },
+        {
+          "run": "bun --filter @trycompai/framework-editor run lint",
+          "why": "lint rules of @trycompai/framework-editor"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "apps-mcp-server",
+      "title": "Speakeasy-generated @trycompai/mcp-server (published on npm) with hand-patched serve guards",
+      "files": [
+        "apps/mcp-server/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/mcp-server run test",
+          "why": "serve guards and transport"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Files here say DO NOT EDIT and are rewritten by Speakeasy generation, but serve/security.ts and serve/impl.ts carry hand patches (415 for non identity/gzip/deflate request encodings before express.json, origin allowlist, API key required off loopback); regeneration can silently drop them, so keep tests/serve-artifact.test.ts and serve-security.test.ts passing.",
+          "files": [
+            "apps/mcp-server/src/mcp-server/cli/serve/security.ts",
+            "apps/mcp-server/src/mcp-server/cli/serve/impl.ts",
+            "apps/mcp-server/tests/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "apps-portal",
+      "title": "Employee portal (policies, training, device setup) that signs in through the API's auth",
+      "files": [
+        "apps/portal/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/portal run test",
+          "why": "the test suite of @trycompai/portal"
+        },
+        {
+          "run": "bun --filter @trycompai/portal run lint",
+          "why": "lint rules of @trycompai/portal"
+        }
+      ],
+      "risks": [
+        {
+          "text": "complete-training authorizes by session plus an active member row, not RBAC, so custom roles without portal:update can still finish training; the valid video list and HIPAA eligibility come from @trycompai/company and must match the API training service.",
+          "files": [
+            "apps/portal/src/app/api/portal/complete-training/route.ts",
+            "packages/company/src/**"
+          ]
+        },
+        {
+          "text": "The completion email is sent after the response with after() and a 30s timeout; failures are only logged with console.error, so a broken service token shows up only in logs.",
+          "files": [
+            "apps/portal/src/app/api/portal/complete-training/route.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "claude",
+      "title": "Claude Code skills and reviewer agents (rbac, security, test-writer, api-endpoint-auditor) that restate the repo rules",
+      "files": [
+        ".claude/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "codeium",
+      "title": "Windsurf/Codeium agent rules",
+      "files": [
+        ".codeium/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "cursor",
+      "title": "Cursor rules (.mdc) and MCP config that mirror the CLAUDE.md rules",
+      "files": [
+        ".cursor/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "docs",
+      "title": "Design plans and specs written while building features; not read by code",
+      "files": [
+        "docs/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "githooks",
+      "title": "Opt-in git hooks: post-checkout creates a per-worktree env and database for new worktrees (git config core.hooksPath .githooks)",
+      "files": [
+        ".githooks/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "github",
+      "title": "CI: type checks, DB migrations on main/release, Trigger.dev task deploys, device-agent and extension releases, SDK generation, security regression tests",
+      "files": [
+        ".github/**"
+      ],
+      "checks": [
+        {
+          "run": "bun test ./.github/tests/security-ci.test.ts",
+          "why": "security CI workflow regressions"
+        }
+      ],
+      "risks": [
+        {
+          "text": "The Bun version (1.4.4) and Trigger.dev CLI (4.7.7) are pinned separately in the workflows, the composite bun-install action, Dockerfiles and package.json; bump them together or CI and deploys build on different runtimes (brotli CVE-2026-111497 fix).",
+          "files": [
+            ".github/actions/bun-install/action.yml",
+            ".github/workflows/trigger-tasks-deploy-main.yml",
+            ".github/workflows/trigger-tasks-deploy-release.yml"
+          ]
+        },
+        {
+          "text": "Database migrations deploy from CI with `bunx prisma migrate deploy` on main and release; never rely on `prisma migrate dev` outside a local database.",
+          "files": [
+            ".github/workflows/database-migrations-main.yml",
+            ".github/workflows/database-migrations-release.yml"
+          ]
+        },
+        {
+          "text": "Device-agent releases sign Windows builds and fail if any .exe is unsigned; latest.yml hash is recalculated after signing, so changing the step order breaks auto-update checksums.",
+          "files": [
+            ".github/workflows/device-agent-release.yml"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "husky",
+      "title": "Husky hooks: commit-msg runs commitlint (conventional commits)",
+      "files": [
+        ".husky/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "integrations-catalog",
+      "title": "Public catalog of integrations, generated from the internal API by tools/integrations-catalog-sync",
+      "files": [
+        "integrations-catalog/**"
+      ],
+      "checks": [],
+      "risks": [
+        {
+          "text": "Generated by tools/integrations-catalog-sync: do not hand edit, and it must not gain check DSL, sync definitions, internal IDs or credential hints.",
+          "files": [
+            "integrations-catalog/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packages-analytics",
+      "title": "PostHog analytics provider",
+      "files": [
+        "packages/analytics/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/analytics run typecheck",
+          "why": "types of @trycompai/analytics"
+        },
+        {
+          "run": "bun --filter @trycompai/analytics run lint",
+          "why": "lint rules of @trycompai/analytics"
+        }
+      ],
+      "risks": [
+        {
+          "text": "NEXT_PUBLIC_POSTHOG_KEY and HOST are inlined at build time and the provider silently skips init when either is missing, so a missing build arg means no analytics and no error.",
+          "files": [
+            "packages/analytics/src/components/provider.tsx"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packages-auth",
+      "title": "RBAC definitions: resource:action permissions and built-in roles, shared by API and app",
+      "files": [
+        "packages/auth/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/auth run typecheck",
+          "why": "types of @trycompai/auth"
+        }
+      ],
+      "risks": [
+        {
+          "text": "permissions.ts is the single source for roles; RESTRICTED_ROLES and PRIVILEGED_ROLES change data visibility in every API guard and app route gate, so edit it together with ROUTE_PERMISSIONS and API role checks.",
+          "files": [
+            "packages/auth/src/permissions.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packages-billing",
+      "title": "SKU/catalog definitions for billing",
+      "files": [
+        "packages/billing/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/billing run test",
+          "why": "the test suite of @trycompai/billing"
+        },
+        {
+          "run": "bun --filter @trycompai/billing run typecheck",
+          "why": "types of @trycompai/billing"
+        },
+        {
+          "run": "bun --filter @trycompai/billing run lint",
+          "why": "lint rules of @trycompai/billing"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "packages-company",
+      "title": "Shared training and evidence-form definitions (video IDs, HIPAA rule) used by api, app and portal",
+      "files": [
+        "packages/company/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/company run typecheck",
+          "why": "types of @trycompai/company"
+        },
+        {
+          "run": "bun --filter @trycompai/company run lint",
+          "why": "lint rules of @trycompai/company"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "packages-db",
+      "title": "Prisma schema (split per model), migrations, client generation and the published @trycompai/db package",
+      "files": [
+        "packages/db/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/db run check-types",
+          "why": "types of the db package"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Edit only packages/db/prisma/schema; apps/*/prisma/schema copies and apps/portal/prisma/schema.prisma are generated and the schema check fails when they drift.",
+          "files": [
+            "packages/db/prisma/schema/**",
+            "scripts/check-generated-prisma-schemas.js"
+          ]
+        },
+        {
+          "text": "postinstall ends in `|| true`, so a failed prisma generate is silent; new fields appear in @prisma/client only after db:generate or build.",
+          "files": [
+            "packages/db/package.json",
+            "packages/db/scripts/generate-prisma-client-js.js"
+          ]
+        },
+        {
+          "text": "db:migrate is `prisma migrate dev` and db:migrate:reset drops the database; use them only on a local database. Deploys run `prisma migrate deploy`.",
+          "files": [
+            "packages/db/package.json",
+            "packages/db/prisma/migrations/**"
+          ]
+        },
+        {
+          "text": "prisma.config.ts uses dotenv/config, which does not override variables already set, so a DATABASE_URL in the shell wins over .env.",
+          "files": [
+            "packages/db/prisma.config.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packages-device-agent",
+      "title": "Electron device agent (electron-vite, electron-builder, auto-update)",
+      "files": [
+        "packages/device-agent/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/device-agent run test",
+          "why": "the test suite of @trycompai/device-agent"
+        },
+        {
+          "run": "bun --filter @trycompai/device-agent run typecheck",
+          "why": "types of @trycompai/device-agent"
+        },
+        {
+          "run": "bun --filter @trycompai/device-agent run lint",
+          "why": "lint rules of @trycompai/device-agent"
+        }
+      ],
+      "risks": [
+        {
+          "text": "Auto-update downloads and installs on quit, and Windows update checksums depend on the post-signing latest.yml recalculation in the release workflow; changing publish config or signing order breaks updates for installed devices.",
+          "files": [
+            "packages/device-agent/src/main/index.ts",
+            "packages/device-agent/electron-builder.config.js",
+            ".github/workflows/device-agent-release.yml"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packages-docs",
+      "title": "Mintlify docs and the generated public openapi.json",
+      "files": [
+        "packages/docs/**"
+      ],
+      "checks": [],
+      "risks": [
+        {
+          "text": "openapi.json is written by the API in development boot; commit the regenerated file, do not hand edit it, since the daily Speakeasy generation reads it.",
+          "files": [
+            "packages/docs/openapi.json"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packages-email",
+      "title": "Email templates and rendering",
+      "files": [
+        "packages/email/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/email run test",
+          "why": "the test suite of @trycompai/email"
+        },
+        {
+          "run": "bun --filter @trycompai/email run typecheck",
+          "why": "types of @trycompai/email"
+        },
+        {
+          "run": "bun --filter @trycompai/email run lint",
+          "why": "lint rules of @trycompai/email"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "packages-framework-editor-cli",
+      "title": "CLI for syncing frameworks to an API (--api-url)",
+      "files": [
+        "packages/framework-editor-cli/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/framework-editor-cli run typecheck",
+          "why": "types of @trycompai/framework-editor-cli"
+        },
+        {
+          "run": "bun --filter @trycompai/framework-editor-cli run lint",
+          "why": "lint rules of @trycompai/framework-editor-cli"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "packages-integration-platform",
+      "title": "Integration manifests, checks, DSL interpreter and registry",
+      "files": [
+        "packages/integration-platform/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/integration-platform run verify",
+          "why": "manifest validator"
+        },
+        {
+          "run": "bun --filter @trycompai/integration-platform run typecheck",
+          "why": "types"
+        }
+      ],
+      "risks": [
+        {
+          "text": "A new code manifest must be imported and added in registry/index.ts or it is never loaded; registerDynamic silently ignores ids that already exist as code manifests.",
+          "files": [
+            "packages/integration-platform/src/registry/index.ts"
+          ]
+        },
+        {
+          "text": "Task type files are generated from task-mappings.ts; rerun generate:tasks after changing mappings.",
+          "files": [
+            "packages/integration-platform/package.json",
+            "packages/integration-platform/scripts/generate-task-types.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packages-integrations",
+      "title": "Cloud provider helpers (aws, azure, gcp, github, deel) and public assets",
+      "files": [
+        "packages/integrations/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/integrations run typecheck",
+          "why": "types of @trycompai/integrations"
+        },
+        {
+          "run": "bun --filter @trycompai/integrations run lint",
+          "why": "lint rules of @trycompai/integrations"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "packages-kv",
+      "title": "Key-value store wrapper",
+      "files": [
+        "packages/kv/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/kv run typecheck",
+          "why": "types of @trycompai/kv"
+        },
+        {
+          "run": "bun --filter @trycompai/kv run lint",
+          "why": "lint rules of @trycompai/kv"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "packages-tsconfig",
+      "title": "Shared tsconfig bases",
+      "files": [
+        "packages/tsconfig/**"
+      ],
+      "checks": [
+        {
+          "run": "bun run test",
+          "why": "the test suite"
+        },
+        {
+          "run": "bun run typecheck",
+          "why": "types"
+        },
+        {
+          "run": "bun run lint",
+          "why": "lint rules"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "packages-ui",
+      "title": "Legacy @trycompai/ui component library being phased out for @trycompai/design-system",
+      "files": [
+        "packages/ui/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/ui run test",
+          "why": "the test suite of @trycompai/ui"
+        },
+        {
+          "run": "bun --filter @trycompai/ui run typecheck",
+          "why": "types of @trycompai/ui"
+        },
+        {
+          "run": "bun --filter @trycompai/ui run lint",
+          "why": "lint rules of @trycompai/ui"
+        }
+      ],
+      "risks": [],
+      "deprecated": {
+        "why": "Legacy library being phased out; new UI uses @trycompai/design-system",
+        "use": "apps-app"
+      }
+    },
+    {
+      "id": "packages-utils",
+      "title": "TODO: what packages/utils/** is for",
+      "files": [
+        "packages/utils/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/utils run typecheck",
+          "why": "types of @trycompai/utils"
+        },
+        {
+          "run": "bun --filter @trycompai/utils run lint",
+          "why": "lint rules of @trycompai/utils"
+        }
+      ],
+      "risks": []
+    },
+    {
+      "id": "root",
+      "title": "Monorepo root: package.json/turbo, Dockerfile (app, portal, migrator), env template, repo rules (CLAUDE.md, AGENTS.md), release config",
+      "files": [
+        ".cursorrules",
+        ".dockerignore",
+        ".env.example",
+        ".gitignore",
+        ".gitmessage",
+        ".mcp.json",
+        ".prettierignore",
+        ".prettierrc",
+        ".syncpackrc.json",
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "CLAUDE.md",
+        "CONTRIBUTING.md",
+        "Dockerfile",
+        "LICENSE",
+        "README.md",
+        "REVIEW.md",
+        "SECURITY.md",
+        "SELF_HOSTING.md",
+        "buildspec.yml",
+        "bun.lock",
+        "bunfig.toml",
+        "commitlint.config.ts",
+        "comp.code-workspace",
+        "deploy.sh",
+        "docker-compose.yml",
+        "gram.json",
+        "markdown.d.ts",
+        "opencode.json",
+        "package.json",
+        "release.config.js",
+        "skills-lock.json",
+        "tsconfig.json",
+        "turbo.json"
+      ],
+      "checks": [
+        {
+          "run": "bun run typecheck",
+          "why": "types of all workspaces"
+        },
+        {
+          "run": "bun run lint",
+          "why": "lint + syncpack"
+        },
+        {
+          "run": "bun run test",
+          "why": "all workspace tests"
+        },
+        {
+          "run": "bun run check:prisma-schemas",
+          "why": "Prisma schema copies match"
+        }
+      ],
+      "risks": [
+        {
+          "text": "The root Dockerfile migrator stage installs prisma ^6.14.0 and the published @trycompai/db ^1.3.4, then copies local migrations into its dist and runs `prisma migrate deploy` against that published schema, while packages/db uses prisma 7.6.0; a migration needing newer Prisma or an unpublished schema change fails at deploy.",
+          "files": [
+            "Dockerfile"
+          ]
+        },
+        {
+          "text": "Bun 1.4.4 is pinned in packageManager and every Dockerfile stage, and bunfig.toml (hoisted linker) must be copied before bun install; without it Bun 1.3+ makes isolated installs and the later image stages cannot find node_modules.",
+          "files": [
+            "package.json",
+            "Dockerfile",
+            "bunfig.toml",
+            "bun.lock"
+          ]
+        },
+        {
+          "text": "NEXT_PUBLIC_* values are baked into the app and portal at image build time via Dockerfile ARG; a new browser-visible variable needs an ARG/ENV here and a rebuild, not just a runtime env.",
+          "files": [
+            "Dockerfile",
+            ".env.example"
+          ]
+        },
+        {
+          "text": "turbo globalEnv lists the env vars that invalidate cached builds; a new env var missing there is ignored by turbo cache and can ship stale builds.",
+          "files": [
+            "turbo.json"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scripts",
+      "title": "Worktree/database setup scripts, dependency updater and the Prisma schema-copy check",
+      "files": [
+        "scripts/**"
+      ],
+      "checks": [
+        {
+          "run": "bun run check:prisma-schemas",
+          "why": "per-app Prisma schema copies match packages/db"
+        }
+      ],
+      "risks": [
+        {
+          "text": "scripts/check-generated-prisma-schemas.js fails when any apps/*/prisma/schema fragment differs from packages/db/prisma/schema; the app copies are generated, edit only packages/db.",
+          "files": [
+            "scripts/check-generated-prisma-schemas.js"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tasks",
+      "title": "Scratch todo/plan notes for a feature branch",
+      "files": [
+        "tasks/**"
+      ],
+      "checks": [],
+      "risks": []
+    },
+    {
+      "id": "tools",
+      "title": "integrations-catalog-sync scripts (run on demand)",
+      "files": [
+        "tools/**"
+      ],
+      "checks": [],
+      "risks": [
+        {
+          "text": "sync.mjs needs COMPAI_INTERNAL_API_BASE and COMPAI_INTERNAL_TOKEN and is rate limited (concurrency 2, 100 ms spacing); never commit the token or raise the limits against a live API.",
+          "files": [
+            "tools/integrations-catalog-sync/sync.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vscode",
+      "title": "Shared VS Code editor settings",
+      "files": [
+        ".vscode/**"
+      ],
+      "checks": [],
+      "risks": []
+    }
+  ],
+  "rules": [
+    {
+      "id": "api-guards-and-permission",
+      "rule": "Every customer-facing API endpoint has @UseGuards(HybridAuthGuard, PermissionGuard) and @RequirePermission, and controllers use @Controller({path,version:'1'}) not 'v1/x'.",
+      "why": "Without them the endpoint is unprotected or unlogged for customers and MCP clients; AuditLogInterceptor only records mutations that carry permission metadata; 'v1/x' double-prefixes the route.",
+      "files": [
+        "apps/api/src/**/*.controller.ts",
+        "apps/api/src/audit/audit-log.interceptor.ts"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/api run test",
+          "why": "controller and guard specs"
+        }
+      ]
+    },
+    {
+      "id": "org-scoped-queries",
+      "rule": "Every Prisma query, including raw SQL, filters by the organizationId from the auth context, never from client input.",
+      "why": "A missing filter lets one customer read or change another customer's data.",
+      "files": [
+        "apps/api/src/**"
+      ],
+      "checks": []
+    },
+    {
+      "id": "auth-only-in-api",
+      "rule": "Frontends never run their own better-auth instance; sessions come from the API and raw fetches to it send credentials:'include'.",
+      "why": "A local instance forks sessions and cookies, and a fetch without credentials gets 401.",
+      "files": [
+        "apps/app/src/utils/auth-client.ts",
+        "apps/portal/src/app/lib/auth.ts",
+        "apps/api/src/auth/**"
+      ],
+      "checks": []
+    },
+    {
+      "id": "membership-via-people-api",
+      "rule": "Role and membership changes go through /v1/people/:id, not better-auth's membership routes.",
+      "why": "The API refuses those routes and the people endpoints apply the role-escalation checks, so bypassing them either fails or would allow privilege escalation.",
+      "files": [
+        "apps/api/src/auth/membership-route-policy.ts",
+        "apps/api/src/people/utils/role-assignment.ts"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/api run test",
+          "why": "membership policy and role assignment specs"
+        }
+      ]
+    },
+    {
+      "id": "signed-webhooks-raw-body",
+      "rule": "Signed webhook paths are listed in RAW_BODY_PATHS and handlers claim each event id before processing.",
+      "why": "Signature checks need the exact bytes, and providers resend events; without the claim a replay double-applies billing.",
+      "files": [
+        "apps/api/src/main.ts",
+        "apps/api/src/billing/stripe-webhook-records.ts"
+      ],
+      "checks": []
+    },
+    {
+      "id": "permissions-single-source",
+      "rule": "Role and permission definitions live only in packages/auth/src/permissions.ts; API guards and app route gating read from it.",
+      "why": "Hardcoded copies drift and users get access in one app that the other denies.",
+      "files": [
+        "packages/auth/src/permissions.ts",
+        "apps/app/src/lib/permissions.ts"
+      ],
+      "checks": []
+    },
+    {
+      "id": "prisma-schema-single-source",
+      "rule": "The Prisma schema is edited only in packages/db/prisma/schema and the app copies are regenerated.",
+      "why": "Apps compile against a stale client or fail the schema check, and migrations then disagree with the schema.",
+      "files": [
+        "packages/db/prisma/schema/**",
+        "apps/*/prisma/**"
+      ],
+      "checks": [
+        {
+          "run": "bun run check:prisma-schemas",
+          "why": "app schema copies match packages/db"
+        }
+      ]
+    },
+    {
+      "id": "openapi-committed-and-described",
+      "rule": "After adding or changing an endpoint, boot the API in dev, commit the regenerated packages/docs/openapi.json, and give each public operation a summary and description.",
+      "why": "The Speakeasy job builds @trycompai/mcp-server from that file; a stale file means customers never get the tool, and openapi-docs.spec.ts fails the build on a missing description.",
+      "files": [
+        "packages/docs/openapi.json",
+        "apps/api/src/openapi-docs.spec.ts",
+        "apps/api/src/main.ts"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/api run test",
+          "why": "includes openapi-docs.spec.ts"
+        }
+      ]
+    },
+    {
+      "id": "runtime-versions-in-step",
+      "rule": "Bun 1.4.4, Node 22.23.4 images and Trigger.dev 4.7.7 are bumped together across package.json, Dockerfiles and workflows.",
+      "why": "Deployed tasks and images that fall back to an older runtime ship the Brotli decoder bug (CVE-2026-111497).",
+      "files": [
+        "package.json",
+        "Dockerfile",
+        "apps/api/Dockerfile.multistage",
+        ".github/workflows/**"
+      ],
+      "checks": []
+    },
+    {
+      "id": "mcp-serve-guards",
+      "rule": "The MCP serve command refuses unsupported request encodings before express.json and requires an API key off loopback.",
+      "why": "A crafted Brotli body would reach the vulnerable decoder, and an unauthenticated non-loopback server would expose customer tools.",
+      "files": [
+        "apps/mcp-server/src/mcp-server/cli/serve/**"
+      ],
+      "checks": [
+        {
+          "run": "bun --filter @trycompai/mcp-server run test",
+          "why": "serve guard tests"
+        }
+      ]
+    }
+  ],
+  "ignore": [],
+  "hotspots": [
+    {
+      "file": "apps/api/src/admin-organizations/admin-tasks.controller.ts",
+      "symbol": "getAutomationRuns",
+      "line": 112,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/admin-organizations/admin-tasks.controller.ts",
+      "symbol": "getIntegrationCheckRuns",
+      "line": 126,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/audit/audit-log.interceptor.ts",
+      "symbol": "intercept",
+      "line": 49,
+      "labels": [
+        "auth"
+      ],
+      "rules": [
+        "api-guards-and-permission",
+        "org-scoped-queries"
+      ],
+      "note": "Decides who may do what"
+    },
+    {
+      "file": "apps/api/src/auth/api-key.service.ts",
+      "symbol": "validateApiKey",
+      "line": 175,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/auth/app-access.ts",
+      "symbol": "resolveRolePermissions",
+      "line": 40,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database; called from 3 other files read"
+    },
+    {
+      "file": "apps/api/src/auth/auth.server.ts",
+      "symbol": "getCookieDomain",
+      "line": 56,
+      "labels": [
+        "secrets"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Reads secrets or the environment"
+    },
+    {
+      "file": "apps/api/src/auth/auth.server.ts",
+      "symbol": "getCustomDomains",
+      "line": 78,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/auth/auth.server.ts",
+      "symbol": "validateSecurityConfig",
+      "line": 218,
+      "labels": [
+        "secrets"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Reads secrets or the environment"
+    },
+    {
+      "file": "apps/api/src/auth/auth.server.ts",
+      "symbol": "sendInvitationEmail",
+      "line": 458,
+      "labels": [
+        "secrets"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Reads secrets or the environment"
+    },
+    {
+      "file": "apps/api/src/auth/auth.server.ts",
+      "symbol": "sendVerificationOTP",
+      "line": 524,
+      "labels": [
+        "secrets"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Reads secrets or the environment"
+    },
+    {
+      "file": "apps/api/src/auth/internal-token.guard.ts",
+      "symbol": "canActivate",
+      "line": 17,
+      "labels": [
+        "secrets"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Reads secrets or the environment"
+    },
+    {
+      "file": "apps/api/src/auth/mcp-oauth-hooks.ts",
+      "symbol": "assertConsentOwner",
+      "line": 52,
+      "labels": [
+        "auth"
+      ],
+      "rules": [
+        "auth-only-in-api",
+        "org-scoped-queries"
+      ],
+      "note": "Decides who may do what"
+    },
+    {
+      "file": "apps/api/src/auth/oauth-consent.ts",
+      "symbol": "getPendingConsent",
+      "line": 19,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database; called from 1 other file read"
+    },
+    {
+      "file": "apps/api/src/auth/origin-policy.ts",
+      "symbol": "getTrustedOrigins",
+      "line": 37,
+      "labels": [
+        "secrets"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Reads secrets or the environment"
+    },
+    {
+      "file": "apps/api/src/auth/origin-policy.ts",
+      "symbol": "getCompExtensionTrustedOrigins",
+      "line": 42,
+      "labels": [
+        "secrets"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Reads secrets or the environment"
+    },
+    {
+      "file": "apps/api/src/auth/permission.guard.ts",
+      "symbol": "canActivate",
+      "line": 49,
+      "labels": [
+        "auth"
+      ],
+      "rules": [
+        "auth-only-in-api",
+        "org-scoped-queries"
+      ],
+      "note": "Decides who may do what"
+    },
+    {
+      "file": "apps/api/src/auth/platform-admin.guard.ts",
+      "symbol": "canActivate",
+      "line": 24,
+      "labels": [
+        "db-read",
+        "auth"
+      ],
+      "rules": [
+        "auth-only-in-api",
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database, decides who may do what"
+    },
+    {
+      "file": "apps/api/src/finding-template/finding-template.controller.ts",
+      "symbol": "getAllFindingTemplates",
+      "line": 48,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/findings/findings.controller.ts",
+      "symbol": "checkPlatformAdmin",
+      "line": 339,
+      "labels": [
+        "db-read",
+        "authz"
+      ],
+      "rules": [
+        "api-guards-and-permission",
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database, checks a role"
+    },
+    {
+      "file": "apps/api/src/framework-editor/framework-family/framework-family.controller.ts",
+      "symbol": "findAll",
+      "line": 28,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/integration-platform/controllers/admin-integrations.controller.ts",
+      "symbol": "listIntegrations",
+      "line": 50,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/integration-platform/controllers/dynamic-integrations.controller.ts",
+      "symbol": "list",
+      "line": 247,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/integration-platform/controllers/oauth.controller.ts",
+      "symbol": "markRipplingAppInstalled",
+      "line": 696,
+      "labels": [
+        "network"
+      ],
+      "rules": [
+        "api-guards-and-permission"
+      ],
+      "note": "Calls out over the network"
+    },
+    {
+      "file": "apps/api/src/main.ts",
+      "symbol": "bootstrap",
+      "line": 37,
+      "labels": [
+        "fs-write"
+      ],
+      "rules": [
+        "openapi-committed-and-described"
+      ],
+      "note": "Writes files"
+    },
+    {
+      "file": "apps/api/src/people/utils/role-assignment.ts",
+      "symbol": "validateAssignableRoles",
+      "line": 15,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/people/utils/role-assignment.ts",
+      "symbol": "resolveCallerMemberActions",
+      "line": 79,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/people/utils/role-assignment.ts",
+      "symbol": "resolveCallerEffectivePermissions",
+      "line": 131,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/api/src/timelines/admin-timeline-templates.controller.ts",
+      "symbol": "findAll",
+      "line": 40,
+      "labels": [
+        "db-read"
+      ],
+      "rules": [
+        "org-scoped-queries"
+      ],
+      "note": "Queries the database"
+    },
+    {
+      "file": "apps/app/src/lib/permissions.ts",
+      "symbol": "hasPermission",
+      "line": 52,
+      "labels": [
+        "authz"
+      ],
+      "rules": [
+        "permissions-single-source"
+      ],
+      "note": "Checks a role; called from 1 other file read"
+    },
+    {
+      "file": "apps/app/src/lib/permissions.ts",
+      "symbol": "hasAnyPermission",
+      "line": 60,
+      "labels": [
+        "authz"
+      ],
+      "rules": [
+        "permissions-single-source"
+      ],
+      "note": "Checks a role"
+    },
+    {
+      "file": "apps/app/src/lib/permissions.ts",
+      "symbol": "canAccessAuditorView",
+      "line": 135,
+      "labels": [
+        "authz"
+      ],
+      "rules": [
+        "permissions-single-source"
+      ],
+      "note": "Checks a role"
+    },
+    {
+      "file": "apps/app/src/lib/permissions.ts",
+      "symbol": "canAccessApp",
+      "line": 195,
+      "labels": [
+        "authz"
+      ],
+      "rules": [
+        "permissions-single-source"
+      ],
+      "note": "Checks a role"
+    },
+    {
+      "file": "apps/mcp-server/src/mcp-server/cli/serve/impl.ts",
+      "symbol": "main",
+      "line": 34,
+      "labels": [
+        "secrets"
+      ],
+      "rules": [
+        "mcp-serve-guards"
+      ],
+      "note": "Reads secrets or the environment"
+    },
+    {
+      "file": "apps/portal/src/app/lib/auth.ts",
+      "symbol": "getSession",
+      "line": 96,
+      "labels": [
+        "network"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Calls out over the network; called from 3 other files read"
+    },
+    {
+      "file": "apps/portal/src/app/lib/auth.ts",
+      "symbol": "setActiveOrganization",
+      "line": 124,
+      "labels": [
+        "network"
+      ],
+      "rules": [
+        "auth-only-in-api"
+      ],
+      "note": "Calls out over the network"
+    }
+  ]
+}
